@@ -4,6 +4,12 @@ pragma solidity 0.8.17;
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
+/**
+ * @title Staking Contract
+ * @author Josh Guha
+ * @notice StakeContract accepts ERC721Stake as stake asset and pays out RewardToken as stake reward
+ */
+
 contract RewardToken is ERC20 {
     address public immutable deployer;
 
@@ -11,8 +17,14 @@ contract RewardToken is ERC20 {
         deployer = msg.sender;
     }
 
+    /**
+     * @dev Mints new ERC20 Reward Tokens
+     * @dev Only the deployer can mint new tokens
+     * @param account Address to mint to
+     * @param amount Amount to mint
+     */
     function mint(address account, uint256 amount) external {
-        require(msg.sender == deployer, "Not deployer");
+        require(msg.sender == deployer, "Not deployer"); // Access control
         _mint(account, amount);
     }
 }
@@ -27,6 +39,11 @@ contract ERC721Stake is ERC721 {
         deployer = msg.sender;
     }
 
+    /**
+     * @dev Mints new ERC721Stake NFTs
+     * @dev Only the deployer can mint new NFTs
+     * @param to Address to mint to
+     */
     function safeMint(address to) external payable {
         // Access control
         require(msg.sender == deployer, "Not deployer");
@@ -55,7 +72,7 @@ contract StakeContract is IERC721Receiver {
     mapping(uint256 => address) public tokenOwner;
 
     struct Staker {
-        uint256[] tokens;
+        uint256 stakedTokenCount;
         mapping(uint256 => uint256) tokenStakeTime;
         uint256 currentTokensRewardClaimed;
     }
@@ -65,25 +82,39 @@ contract StakeContract is IERC721Receiver {
         erc721Stake = _erc721Stake;
     }
 
+    /**
+     * @dev Stakes ERC721Stake in this contract
+     * @dev Only the deployer can mint new NFTs
+     * @dev From the perspective of stake reward calculation, the stake tokens are considered fungible
+     * @param _user Address which owns nft
+     * @param _tokenId tokenId of nft
+     */
     function _stake(address _user, uint256 _tokenId) internal {
         require(erc721Stake.ownerOf(_tokenId) == _user, "Not the owner");
         Staker storage staker = stakers[_user];
-        uint256 tokensLength = staker.tokens.length;
 
-        staker.tokens.push(tokensLength);
-        staker.tokenStakeTime[tokensLength] = block.timestamp;
+        // staker.tokens does not discriminate between tokenIds
+        staker.tokenStakeTime[++staker.stakedTokenCount] = block.timestamp;
         tokenOwner[_tokenId] = _user;
+
+        // External calls at the end to prevent reentrancy attacks
         erc721Stake.safeTransferFrom(_user, address(this), _tokenId);
     }
 
+    /**
+     * @dev Unstakes ERC721Stake from this contract
+     * @dev when a user unstakes, the latest staked item is unstaked (only from reward calculation perspective)
+     * @notice User can lose claimable reward tokens if he/she unstakes a token without claiming stake rewards
+     * @param _user Address to unstake to (must be the same address that staked)
+     * @param _tokenId tokenId of ERC721Stake
+     */
     function _unstake(address _user, uint256 _tokenId) internal {
         require(tokenOwner[_tokenId] == _user, "Not the owner");
         Staker storage staker = stakers[_user];
-        uint256[] memory tokens = staker.tokens;
 
-        uint256 lastToken = tokens[tokens.length - 1];
         uint256 totalTokenEmission = ((block.timestamp -
-            staker.tokenStakeTime[lastToken]) / STAKING_TIME) * EMISSION;
+            staker.tokenStakeTime[staker.stakedTokenCount--]) / STAKING_TIME) *
+            EMISSION;
 
         // Assumes user has already claimed all emissions
         staker.currentTokensRewardClaimed = totalTokenEmission >
@@ -91,24 +122,25 @@ contract StakeContract is IERC721Receiver {
             ? 0
             : staker.currentTokensRewardClaimed - totalTokenEmission;
 
-        staker.tokens.pop();
         delete tokenOwner[_tokenId];
 
         erc721Stake.safeTransferFrom(address(this), _user, _tokenId);
     }
 
+    /**
+     * @dev Claim rewards from staking
+     * @param _user Address to of user to claim reward for
+     */
     function claimRewards(address _user) public {
         Staker storage staker = stakers[_user];
-        uint256[] memory tokens = staker.tokens;
+        uint256 stakedTokenCount = staker.stakedTokenCount;
         uint256 cumulativeReward;
 
-        for (uint256 i = 0; i < tokens.length; i++) {
-            if (
-                staker.tokenStakeTime[tokens[i]] <
-                block.timestamp + STAKING_TIME
-            ) {
-                uint256 stakedDays = (block.timestamp -
-                    staker.tokenStakeTime[tokens[i]]) / STAKING_TIME;
+        for (uint256 i = 0; i < stakedTokenCount; i++) {
+            uint256 tokenStakeTime = staker.tokenStakeTime[i];
+            if (tokenStakeTime < block.timestamp + STAKING_TIME) {
+                uint256 stakedDays = (block.timestamp - tokenStakeTime) /
+                    STAKING_TIME;
 
                 cumulativeReward += EMISSION * stakedDays;
             }
@@ -122,6 +154,9 @@ contract StakeContract is IERC721Receiver {
         staker.currentTokensRewardClaimed = cumulativeReward;
     }
 
+    /**
+     * @dev Implementation of IERC721Receiver.onERC721Received
+     */
     function onERC721Received(
         address, // operator
         address, // from
