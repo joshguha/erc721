@@ -4,6 +4,12 @@ pragma solidity 0.8.17;
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/common/ERC2981.sol";
 
+/**
+ * @title ERC721AllowList - ERC721 with presale
+ * @author Josh Guha
+ * @notice Presale stores whitelist in allowList mapping
+ */
+
 contract ERC721AllowList is ERC721, ERC2981 {
     uint256 public totalSupply;
     mapping(address => uint256) public allowList;
@@ -18,13 +24,19 @@ contract ERC721AllowList is ERC721, ERC2981 {
         _setDefaultRoyalty(msg.sender, 250);
     }
 
+    /**
+     * @dev Override ERC721 and ERC2981 supportsInterface methods
+     */
     function supportsInterface(
         bytes4 interfaceId
     ) public view virtual override(ERC721, ERC2981) returns (bool) {
         return super.supportsInterface(interfaceId);
     }
 
-    function mint() external payable returns (bool) {
+    /**
+     * @dev Function to purchase new NFTs for constant price
+     */
+    function mint() external payable {
         // Total supply check
         uint256 _totalSupply = totalSupply;
         require(totalSupply < MAX_SUPPLY);
@@ -38,11 +50,13 @@ contract ERC721AllowList is ERC721, ERC2981 {
             _totalSupply++;
         }
         totalSupply = _totalSupply;
-
-        return true;
     }
 
-    function presale() external returns (bool) {
+    /**
+     * @dev Function to claim whitelist NFT
+     * @dev Max number of NFTs claimable is stored in allowList[msg.sender]
+     */
+    function presale() external {
         // Total supply check
         uint256 _totalSupply = totalSupply;
         require(totalSupply < MAX_SUPPLY);
@@ -63,24 +77,27 @@ contract ERC721AllowList is ERC721, ERC2981 {
             _totalSupply++;
         }
         totalSupply = _totalSupply;
-
-        return true;
     }
 
-    function withdraw() external returns (bool) {
+    /**
+     * @dev Function to withdraw funds from contract
+     * @dev Only deployer can call
+     */
+    function withdraw() external {
+        require(msg.sender == deployer, "Not deployer"); // Access control
+
         uint256 balance = address(this).balance;
         (bool success, ) = deployer.call{value: balance}("");
         require(success, "Failed to send MATIC");
-        return true;
     }
 
-    function updateAllowance(
-        address target,
-        uint256 newAllowance
-    ) external returns (bool) {
+    /**
+     * @dev Function to update the whitelist allowance
+     * @dev Only deployer can call
+     */
+    function updateAllowance(address target, uint256 newAllowance) external {
         require(msg.sender == deployer, "Not deployer");
         allowList[target] = newAllowance;
-        return true;
     }
 
     receive() external payable {

@@ -5,6 +5,12 @@ import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 import "@openzeppelin/contracts/token/common/ERC2981.sol";
 
+/**
+ * @title ERC721MerkleProof - ERC721 with presale
+ * @author Josh Guha
+ * @notice Presale uses merkle proof to authenticate whitelist user
+ */
+
 contract ERC721MerkleProof is ERC721, ERC2981 {
     uint256 public totalSupply;
 
@@ -28,16 +34,22 @@ contract ERC721MerkleProof is ERC721, ERC2981 {
         _setDefaultRoyalty(msg.sender, 250);
     }
 
+    /**
+     * @dev Override ERC721 and ERC2981 supportsInterface methods
+     */
     function supportsInterface(
         bytes4 interfaceId
     ) public view virtual override(ERC721, ERC2981) returns (bool) {
         return super.supportsInterface(interfaceId);
     }
 
-    function mint() external payable returns (bool) {
+    /**
+     * @dev Function to purchase new NFTs for constant price
+     */
+    function mint() external payable {
         // Total supply check
         uint256 _totalSupply = totalSupply;
-        require(totalSupply < MAX_SUPPLY);
+        require(_totalSupply < MAX_SUPPLY);
 
         // Price check
         require(msg.value == PRICE, "Wrong price");
@@ -48,14 +60,17 @@ contract ERC721MerkleProof is ERC721, ERC2981 {
             _totalSupply++;
         }
         totalSupply = _totalSupply;
-
-        return true;
     }
 
+    /**
+     * @dev Function to claim whitelist NFT
+     * @param merkleProof Merkle proof to submit - grows logarithmically with the total number of users in the whitelist
+     * @param ticketNumber Index of claimable NFT in user's whitelist allowance
+     */
     function presale(
-        bytes32[] calldata _merkleProof,
+        bytes32[] calldata merkleProof,
         uint256 ticketNumber
-    ) external returns (bool) {
+    ) external {
         // Total supply check
         uint256 _totalSupply = totalSupply;
         require(totalSupply < MAX_SUPPLY);
@@ -63,7 +78,7 @@ contract ERC721MerkleProof is ERC721, ERC2981 {
         // Merkle root check
         bytes32 leaf = keccak256(abi.encodePacked(msg.sender, ticketNumber));
         require(
-            MerkleProof.verify(_merkleProof, merkleRoot, leaf),
+            MerkleProof.verify(merkleProof, merkleRoot, leaf),
             "Invalid proof"
         );
 
@@ -82,15 +97,18 @@ contract ERC721MerkleProof is ERC721, ERC2981 {
             _totalSupply++;
         }
         totalSupply = _totalSupply;
-
-        return true;
     }
 
-    function withdraw() external returns (bool) {
+    /**
+     * @dev Function to withdraw funds from contract
+     * @dev Only deployer can call
+     */
+    function withdraw() external {
+        require(msg.sender == deployer, "Not deployer");
+
         uint256 balance = address(this).balance;
         (bool success, ) = deployer.call{value: balance}("");
         require(success, "Failed to send MATIC");
-        return true;
     }
 
     receive() external payable {

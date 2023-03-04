@@ -5,6 +5,12 @@ import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/token/common/ERC2981.sol";
 
+/**
+ * @title ERC721Signature - ERC721 with presale
+ * @author Josh Guha
+ * @notice Presale uses digital signature to verify whitelist users
+ */
+
 contract ERC721Signature is ERC721, ERC2981 {
     using ECDSA for bytes32;
 
@@ -26,13 +32,19 @@ contract ERC721Signature is ERC721, ERC2981 {
         _setDefaultRoyalty(msg.sender, 250);
     }
 
+    /**
+     * @dev Override ERC721 and ERC2981 supportsInterface methods
+     */
     function supportsInterface(
         bytes4 interfaceId
     ) public view virtual override(ERC721, ERC2981) returns (bool) {
         return super.supportsInterface(interfaceId);
     }
 
-    function mint() external payable returns (bool) {
+    /**
+     * @dev Function to purchase new NFTs for constant price
+     */
+    function mint() external payable {
         // Total supply check
         uint256 _totalSupply = totalSupply;
         require(totalSupply < MAX_SUPPLY);
@@ -46,14 +58,14 @@ contract ERC721Signature is ERC721, ERC2981 {
             _totalSupply++;
         }
         totalSupply = _totalSupply;
-
-        return true;
     }
 
-    function presale(
-        bytes calldata signature,
-        uint256 ticketNumber
-    ) external returns (bool) {
+    /**
+     * @dev Function to claim whitelist NFT
+     * @param signature Digital signature provided off-chain
+     * @param ticketNumber Index of claimable NFT in user's whitelist allowance
+     */
+    function presale(bytes calldata signature, uint256 ticketNumber) external {
         // Total supply check
         uint256 _totalSupply = totalSupply;
         require(totalSupply < MAX_SUPPLY);
@@ -61,9 +73,9 @@ contract ERC721Signature is ERC721, ERC2981 {
         // Digital Signature proof
         require(
             publicMintingAddress ==
-                bytes32(bytes20(msg.sender)).toEthSignedMessageHash().recover(
-                    signature
-                ),
+                bytes32(keccak256(abi.encode(msg.sender, ticketNumber)))
+                    .toEthSignedMessageHash()
+                    .recover(signature),
             "Signature invalid"
         );
 
@@ -82,23 +94,27 @@ contract ERC721Signature is ERC721, ERC2981 {
             _totalSupply++;
         }
         totalSupply = _totalSupply;
-
-        return true;
     }
 
-    function withdraw() external returns (bool) {
+    /**
+     * @dev Function to withdraw funds from contract
+     * @dev Only deployer can call
+     */
+    function withdraw() external {
+        require(msg.sender == deployer, "Not deployer");
+
         uint256 balance = address(this).balance;
         (bool success, ) = deployer.call{value: balance}("");
         require(success, "Failed to send MATIC");
-        return true;
     }
 
-    function updatePublicMintingAddress(
-        address newAddress
-    ) external returns (bool) {
+    /**
+     * @dev Function to update the public minting address
+     * @dev Can be set to random 32byte address to prevent any more presales
+     */
+    function updatePublicMintingAddress(address newAddress) external {
         require(msg.sender == deployer, "Not the deployer");
         publicMintingAddress = newAddress;
-        return true;
     }
 
     receive() external payable {
