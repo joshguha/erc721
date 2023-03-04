@@ -45,10 +45,10 @@ contract ERC721AllowList is ERC721, ERC2981 {
         require(msg.value == PRICE, "Wrong price");
 
         // Mint NFT
-        _mint(msg.sender, _totalSupply);
         unchecked {
             _totalSupply++;
         }
+        _mint(msg.sender, _totalSupply);
         totalSupply = _totalSupply;
     }
 
@@ -72,10 +72,10 @@ contract ERC721AllowList is ERC721, ERC2981 {
         allowList[msg.sender] = allowance;
 
         // Mint NFT
-        _mint(msg.sender, _totalSupply);
         unchecked {
             _totalSupply++;
         }
+        _mint(msg.sender, _totalSupply);
         totalSupply = _totalSupply;
     }
 
@@ -98,6 +98,13 @@ contract ERC721AllowList is ERC721, ERC2981 {
     function updateAllowance(address target, uint256 newAllowance) external {
         require(msg.sender == deployer, "Not deployer");
         allowList[target] = newAllowance;
+    }
+
+    /**
+     * @dev Override ERC721 _baseURI function
+     */
+    function _baseURI() internal pure override returns (string memory) {
+        return "ipfs://QmS7J6zYDPfE6cte48M9LrjtVb8Ua1Mu4yrCv8Bf27KQtX/";
     }
 
     receive() external payable {
